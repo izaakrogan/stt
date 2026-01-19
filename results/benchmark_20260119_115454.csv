@@ -1,0 +1,2 @@
+Model,Dataset,WER (%),Avg Inference Time (s),Samples
+groq-whisper,en,8.26,0.5270,10

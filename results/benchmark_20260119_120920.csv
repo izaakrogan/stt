@@ -1,0 +1,20 @@
+Model,Dataset,WER (%),Avg Inference Time (s),Samples
+whisper-tiny,en,7.95,0.2691,20
+whisper-base,en,4.00,0.6394,20
+whisper-small,en,2.72,1.3413,20
+faster-whisper-tiny,en,7.21,0.4610,20
+faster-whisper-base,en,6.09,0.9633,20
+faster-whisper-small,en,3.12,2.3747,20
+distil-whisper-small,en,6.23,2.2258,20
+deepgram-nova3,en,4.19,0.8709,20
+assemblyai,en,1.33,3.6961,20
+groq-whisper,en,4.97,0.5018,20
+whisper-tiny,pt_br,33.55,0.4314,20
+whisper-base,pt_br,24.12,0.8329,20
+whisper-small,pt_br,13.03,2.2843,20
+faster-whisper-tiny,pt_br,28.19,0.7747,20
+faster-whisper-base,pt_br,22.14,1.5556,20
+faster-whisper-small,pt_br,12.49,4.3185,20
+deepgram-nova3,pt_br,9.94,1.4560,20
+assemblyai,pt_br,6.07,4.5484,20
+groq-whisper,pt_br,4.84,0.4842,20
