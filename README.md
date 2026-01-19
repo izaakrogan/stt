@@ -47,7 +47,7 @@ python benchmark.py --sample-size 100
 # run all models
 python benchmark.py --all-models --sample-size 100
 
-# brazilian portuguese
+# portuguese
 python benchmark.py --dataset pt --sample-size 50
 
 # specific models

@@ -1,0 +1,5 @@
+Model,Dataset,WER (%),Avg Inference Time (s),Samples
+faster-whisper-small,en,5.05,2.1040,100
+deepgram-nova3,en,3.43,1.1448,100
+assemblyai,en,3.16,4.0763,100
+groq-whisper,en,4.28,3.0244,100
