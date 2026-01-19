@@ -324,7 +324,7 @@ def main():
     parser.add_argument("--sample-size", type=int, default=100, help="number of utterances to test")
     parser.add_argument("--models", nargs="+", choices=list(MODEL_REGISTRY.keys()), help="which models to run")
     parser.add_argument("--all-models", action="store_true", help="run all availible models")
-    parser.add_argument("--dataset", choices=["en", "pt", "all"], default="en")
+    parser.add_argument("--dataset", choices=["en", "pt", "all"], default="pt")
     parser.add_argument("--output", type=Path, default=None, help="output csv path")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--save-samples", type=int, default=0, metavar="N", help="save N audio samples to listen to")

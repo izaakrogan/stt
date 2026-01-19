@@ -4,14 +4,14 @@ Benchmarking Word Error Rate across speech-to-text models for LiveKit voice agen
 
 ## Results
 
-| Model               | English (WER %) | Samples |
-|---------------------|-----------------|---------|
-| faster-whisper-small| 3.91            | 10      |
-| deepgram-nova3      | 5.72            | 10      |
-| assemblyai          | 0.88            | 10      |
-| groq-whisper        | 8.26            | 10      |
+| Model               | Portuguese (WER %) | Avg Inference Time (s) | Samples |
+|---------------------|--------------------|------------------------|---------|
+| faster-whisper-small| 11.99              | 3.9732                 | 50      |
+| deepgram-nova3      | 8.52               | 1.1831                 | 50      |
+| assemblyai          | 5.79               | 4.9879                 | 50      |
+| groq-whisper        | 5.35               | 2.5768                 | 50      |
 
-> **Note:** Run this again with more samples; I did it quick! 100 is fine.
+> **Note:** Run this again with more samples; I did it quick! 100 or more is better.
 
 > **Note:** For voice agents, streaming STT matters more than batch speed. Deepgram and AssemblyAI support streaming (partial transcripts as the user speaks). Groq does not; so despite good accuracy, it's not good for our use case.
 
