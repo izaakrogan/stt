@@ -20,7 +20,7 @@ from tqdm import tqdm
 
 load_dotenv()
 
-from utils import calculate_wer, get_language_code
+from utils import calculate_wer
 
 
 @dataclass
@@ -135,46 +135,48 @@ class DeepgramModel(BaseModel):
 
 
 class AssemblyAIModel(BaseModel):
-    """assemblyai is a bit slow becuase it needs to poll for results"""
-
     def __init__(self, api_key: str, name: str):
         super().__init__(name)
         self.api_key = api_key
 
-    def transcribe(self, audio: np.ndarray, sample_rate: int, language: str) -> str:
+    def _request_with_retry(self, method, url, headers, **kwargs):
         import httpx
 
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                if method == "get":
+                    response = httpx.get(url, headers=headers, timeout=30.0, **kwargs)
+                else:
+                    response = httpx.post(url, headers=headers, timeout=30.0, **kwargs)
+                response.raise_for_status()
+                return response
+            except (httpx.ConnectError, httpx.ReadTimeout) as e:
+                if attempt == max_retries - 1:
+                    raise
+                time.sleep(2 ** attempt)
+
+    def transcribe(self, audio: np.ndarray, sample_rate: int, language: str) -> str:
         wav_bytes = audio_to_wav_bytes(audio, sample_rate)
         headers = {"Authorization": self.api_key}
 
-        # upload first
-        upload_response = httpx.post(
-            "https://api.assemblyai.com/v2/upload",
-            headers=headers,
-            content=wav_bytes,
-            timeout=30.0,
-        )
-        upload_response.raise_for_status()
+        upload_response = self._request_with_retry("post", "https://api.assemblyai.com/v2/upload", headers, content=wav_bytes)
         audio_url = upload_response.json()["upload_url"]
 
         lang_map = {"en": "en", "pt": "pt"}
         lang = lang_map.get(language, language)
 
-        # request transcription
-        transcript_response = httpx.post(
+        transcript_response = self._request_with_retry(
+            "post",
             "https://api.assemblyai.com/v2/transcript",
-            headers=headers,
-            json={"audio_url": audio_url, "language_code": lang},
-            timeout=30.0,
+            headers,
+            json={"audio_url": audio_url, "language_code": lang}
         )
-        transcript_response.raise_for_status()
         transcript_id = transcript_response.json()["id"]
 
-        # poll til done
         polling_url = f"https://api.assemblyai.com/v2/transcript/{transcript_id}"
         while True:
-            poll_response = httpx.get(polling_url, headers=headers, timeout=30.0)
-            poll_response.raise_for_status()
+            poll_response = self._request_with_retry("get", polling_url, headers)
             status = poll_response.json()
 
             if status["status"] == "completed":
@@ -223,7 +225,7 @@ def load_dataset_samples(dataset_name: str, sample_size: int, seed: int = 42) ->
         ds = ds.cast_column("audio", Audio(sampling_rate=16000))
         text_key = "text"
 
-    elif dataset_name in ("pt_br", "pt", "fleurs_pt"):
+    elif dataset_name == "pt":
         ds = load_dataset("facebook/multilingual_librispeech", "portuguese", split="test", streaming=True)
         ds = ds.cast_column("audio", Audio(sampling_rate=16000))
         text_key = "transcript"
@@ -322,7 +324,7 @@ def main():
     parser.add_argument("--sample-size", type=int, default=100, help="number of utterances to test")
     parser.add_argument("--models", nargs="+", choices=list(MODEL_REGISTRY.keys()), help="which models to run")
     parser.add_argument("--all-models", action="store_true", help="run all availible models")
-    parser.add_argument("--dataset", choices=["en", "pt_br", "librispeech", "fleurs_pt", "all"], default="en")
+    parser.add_argument("--dataset", choices=["en", "pt", "all"], default="en")
     parser.add_argument("--output", type=Path, default=None, help="output csv path")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--save-samples", type=int, default=0, metavar="N", help="save N audio samples to listen to")
@@ -345,7 +347,7 @@ def main():
     else:
         model_names = ["faster-whisper-small", "deepgram-nova3", "assemblyai", "groq-whisper"]
 
-    datasets = ["en", "pt_br"] if args.dataset == "all" else [args.dataset]
+    datasets = ["en", "pt"] if args.dataset == "all" else [args.dataset]
 
     # save audio samples if reqested
     if args.save_samples > 0:
@@ -363,8 +365,7 @@ def main():
     all_results: list[ModelResult] = []
 
     for dataset_name in datasets:
-        language = get_language_code(dataset_name)
-        print(f"\n--- Dataset: {dataset_name} (language: {language}) ---")
+        print(f"\n--- Dataset: {dataset_name} ---")
 
         for model_name in model_names:
             print(f"\nLoading {model_name}...")
@@ -374,7 +375,7 @@ def main():
                 print(f"  Failed to load {model_name}: {e}")
                 continue
 
-            result = benchmark_model(model, dataset_name, args.sample_size, language)
+            result = benchmark_model(model, dataset_name, args.sample_size, dataset_name)
             all_results.append(result)
 
             del model
