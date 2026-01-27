@@ -107,7 +107,9 @@ class FasterWhisperModel(BaseModel):
 
     def transcribe(self, audio: np.ndarray, sample_rate: int, language: str) -> str:
         audio = audio.astype(np.float32)
-        segments, _ = self.model.transcribe(audio, language=language)
+        lang_map = {"en": "en", "es": "es", "accented": "en"}
+        lang = lang_map.get(language, language)
+        segments, _ = self.model.transcribe(audio, language=lang)
         return " ".join(segment.text for segment in segments)
 
 
@@ -120,7 +122,7 @@ class DeepgramModel(BaseModel):
         import httpx
 
         wav_bytes = audio_to_wav_bytes(audio, sample_rate)
-        lang_map = {"en": "en", "pt": "pt-BR"}
+        lang_map = {"en": "en", "es": "es", "accented": "en"}
         lang = lang_map.get(language, language)
 
         response = httpx.post(
@@ -163,7 +165,7 @@ class AssemblyAIModel(BaseModel):
         upload_response = self._request_with_retry("post", "https://api.assemblyai.com/v2/upload", headers, content=wav_bytes)
         audio_url = upload_response.json()["upload_url"]
 
-        lang_map = {"en": "en", "pt": "pt"}
+        lang_map = {"en": "en", "es": "es", "accented": "en"}
         lang = lang_map.get(language, language)
 
         transcript_response = self._request_with_retry(
@@ -225,10 +227,17 @@ def load_dataset_samples(dataset_name: str, sample_size: int, seed: int = 42) ->
         ds = ds.cast_column("audio", Audio(sampling_rate=16000))
         text_key = "text"
 
-    elif dataset_name == "pt":
-        ds = load_dataset("facebook/multilingual_librispeech", "portuguese", split="test", streaming=True)
+    elif dataset_name == "es":
+        ds = load_dataset("facebook/multilingual_librispeech", "spanish", split="test", streaming=True)
         ds = ds.cast_column("audio", Audio(sampling_rate=16000))
         text_key = "transcript"
+
+    elif dataset_name == "accented":
+        # EdAcc: Edinburgh International Accents of English Corpus
+        # Non-native English speakers with diverse L1 backgrounds
+        ds = load_dataset("edinburghcstr/edacc", split="test", streaming=True)
+        ds = ds.cast_column("audio", Audio(sampling_rate=16000))
+        text_key = "text"
 
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
@@ -324,7 +333,7 @@ def main():
     parser.add_argument("--sample-size", type=int, default=100, help="number of utterances to test")
     parser.add_argument("--models", nargs="+", choices=list(MODEL_REGISTRY.keys()), help="which models to run")
     parser.add_argument("--all-models", action="store_true", help="run all availible models")
-    parser.add_argument("--dataset", choices=["en", "pt", "all"], default="pt")
+    parser.add_argument("--dataset", choices=["en", "es", "accented", "all"], default="en")
     parser.add_argument("--output", type=Path, default=None, help="output csv path")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--save-samples", type=int, default=0, metavar="N", help="save N audio samples to listen to")
@@ -347,7 +356,7 @@ def main():
     else:
         model_names = ["faster-whisper-small", "deepgram-nova3", "assemblyai", "groq-whisper"]
 
-    datasets = ["en", "pt"] if args.dataset == "all" else [args.dataset]
+    datasets = ["en", "es", "accented"] if args.dataset == "all" else [args.dataset]
 
     # save audio samples if reqested
     if args.save_samples > 0:
@@ -364,23 +373,22 @@ def main():
 
     all_results: list[ModelResult] = []
 
-    for dataset_name in datasets:
-        print(f"\n--- Dataset: {dataset_name} ---")
+    for model_name in model_names:
+        print(f"\nLoading {model_name}...")
+        try:
+            model = MODEL_REGISTRY[model_name]()
+        except Exception as e:
+            print(f"  Failed to load {model_name}: {e}")
+            continue
 
-        for model_name in model_names:
-            print(f"\nLoading {model_name}...")
-            try:
-                model = MODEL_REGISTRY[model_name]()
-            except Exception as e:
-                print(f"  Failed to load {model_name}: {e}")
-                continue
-
+        for dataset_name in datasets:
+            print(f"\n--- Dataset: {dataset_name} ---")
             result = benchmark_model(model, dataset_name, args.sample_size, dataset_name)
             all_results.append(result)
 
-            del model
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+        del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     if all_results:
         print_results_table(all_results)
