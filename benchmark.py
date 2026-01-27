@@ -259,8 +259,8 @@ def load_dataset_samples(dataset_name: str, sample_size: int, seed: int = 42) ->
         count += 1
 
 
-def benchmark_model(model: BaseModel, dataset_name: str, sample_size: int, language: str) -> ModelResult:
-    """runs the benchmark for a single model"""
+def benchmark_model(model: BaseModel, dataset_name: str, sample_size: int, language: str) -> tuple[ModelResult, list[BenchmarkResult]]:
+    """runs the benchmark for a single model, returns summary and per-sample results"""
     results: list[BenchmarkResult] = []
     samples = load_dataset_samples(dataset_name, sample_size)
 
@@ -275,13 +275,14 @@ def benchmark_model(model: BaseModel, dataset_name: str, sample_size: int, langu
     avg_wer = np.mean([r.wer for r in results])
     avg_time = np.mean([r.inference_time for r in results])
 
-    return ModelResult(
+    model_result = ModelResult(
         model_name=model.name,
         dataset_name=dataset_name,
         avg_wer=avg_wer,
         avg_inference_time=avg_time,
         total_samples=len(results),
     )
+    return model_result, results
 
 
 def print_results_table(results: list[ModelResult]):
@@ -305,6 +306,18 @@ def save_results_csv(results: list[ModelResult], output_path: Path):
             writer.writerow([r.model_name, r.dataset_name, f"{r.avg_wer * 100:.2f}", f"{r.avg_inference_time:.4f}", r.total_samples])
 
     print(f"\nResults saved to: {output_path}")
+
+
+def save_detailed_results_csv(results: list[tuple[str, str, list[BenchmarkResult]]], output_path: Path):
+    """Save per-sample results for statistical analysis"""
+    with open(output_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["model", "dataset", "sample_idx", "wer", "inference_time"])
+        for model_name, dataset_name, benchmark_results in results:
+            for idx, r in enumerate(benchmark_results):
+                writer.writerow([model_name, dataset_name, idx, f"{r.wer:.6f}", f"{r.inference_time:.4f}"])
+
+    print(f"Detailed results saved to: {output_path}")
 
 
 def save_audio_samples(dataset_name: str, num_samples: int, seed: int = 42):
@@ -372,6 +385,7 @@ def main():
     print()
 
     all_results: list[ModelResult] = []
+    all_detailed: list[tuple[str, str, list[BenchmarkResult]]] = []
 
     for model_name in model_names:
         print(f"\nLoading {model_name}...")
@@ -383,8 +397,9 @@ def main():
 
         for dataset_name in datasets:
             print(f"\n--- Dataset: {dataset_name} ---")
-            result = benchmark_model(model, dataset_name, args.sample_size, dataset_name)
+            result, detailed_results = benchmark_model(model, dataset_name, args.sample_size, dataset_name)
             all_results.append(result)
+            all_detailed.append((model_name, dataset_name, detailed_results))
 
         del model
         if torch.cuda.is_available():
@@ -393,6 +408,9 @@ def main():
     if all_results:
         print_results_table(all_results)
         save_results_csv(all_results, args.output)
+        # Save detailed per-sample results for statistical analysis
+        detailed_path = args.output.with_stem(args.output.stem + "_detailed")
+        save_detailed_results_csv(all_detailed, detailed_path)
     else:
         print("\nNo results to display")
 
